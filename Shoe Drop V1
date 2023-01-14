@@ -1,0 +1,62 @@
+import requests
+from bs4 import BeautifulSoup
+from selenium import webdriver
+import csv
+import datetime
+import pytz
+
+# Define the URL of the shoe website
+url = 'https://www.snkrs.com/new-releases'
+
+# Initialize the webdriver
+driver = webdriver.Firefox()
+driver.get(url)
+
+# Wait for the page to load
+driver.implicitly_wait(30)
+
+# Use BeautifulSoup to parse the HTML content
+soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+# Find all elements with the class "product-card"
+new_releases = soup.find_all(class_='product-card')
+
+# Open a CSV file to store the data
+with open('new_releases.csv', mode='w') as csv_file:
+    fieldnames = ['Name', 'SKU', 'Release Date', 'Image','Average Price']
+    writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+
+    writer.writeheader()
+    # Check if there are any new releases
+    if new_releases:
+        print("New shoe releases available!")
+        for release in new_releases:
+            # Extract the shoe name, SKU, release date and image from the HTML
+            shoe_name = release.find('h3').text
+            shoe_sku = release.find(class_='sku').text
+            release_date = release.find(class_='release-date').text
+            shoe_image = release.find('img')['src']
+            #Get average price from ebay
+            average_price = get_average_price_from_ebay(shoe_name)
+            # Add the data to the CSV file
+            writer.writerow({'Name': shoe_name, 'SKU':shoe_sku, 'Release Date': release_date, 'Image': shoe_image, 'Average Price': average_price})
+            # Download the image of the shoe
+            response = requests.get(shoe_image)
+            open(shoe_name + '.jpg', 'wb').write(response.content)
+            #Convert release date string to datetime object
+            release_datetime = datetime.datetime.strptime(release_date, '%m/%d/%Y %I:%M %p')
+            # Set timezone to UTC
+            release_datetime = pytz.timezone('UTC').localize(release_datetime)
+            # Add the release to the calendar
+            add_to_calendar(release_datetime, shoe_name)
+    else:
+        print("No new shoe releases at this time.")
+
+# Close the webdriver
+driver.quit()
+
+def get_average_price_from_ebay(shoe_name):
+    # Define the eBay API endpoint and parameters
+    url = 'https://svcs.ebay.com/services/search/FindingService/v1'
+    params = {
+        'OPER
